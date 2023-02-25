@@ -20,10 +20,17 @@ class Constants:
     # power/h induced as bonus if at least one accu is adjacient to the power plant
     ACCU_POWER_BONUS = 95791887
 
-    # dimensino of a base
+    # dimension of a base
     BASE_ROWS = 8
     BASE_COLUMNS = 9
     BASE_OFFENSE_ROWS = 4
+
+    # resource/building types
+    EMPTY = 0
+    CRYSTAL = 1
+    TIBERIUM = 2
+    ACCU = 4
+    POWERPLANT = 8
 
     def get_power_rate(num_accus :int, num_crystal :int) -> int:
         """
@@ -88,12 +95,6 @@ class PowerField:
     production rate of a base. 
     All information is stored in 2D-numpy arrays to speed up calculations
     """
-    EMPTY = 0
-    CRYSTAL = 1
-    TIBERIUM = 2
-    ACCU = 4
-    POWERPLANT = 8
-
     @property
     def adjacent_crystal(self) -> np.ndarray:
         """
@@ -133,12 +134,33 @@ class PowerField:
         """
         return self.__rate
 
-    def __init__(self):
+    def __init__(self, arr :np.ndarray = None):
         self.__adjacent_crystal = self.__create_field(np.int32)
         self.__adjacent_accu = self.__create_field(np.int32)
         self.__resource = self.__create_field(np.int32) 
         self.__building = self.__create_field(np.int32)
         self.__rate = self.__create_field(np.int64) + Constants.BASE_POWER_RATE
+        if arr is not None:
+            self.assign(arr)
+
+    def assign(self, arr :np.ndarray):
+        """
+        Loads the data from the given 2D-numpy array
+        """
+        crystal = []
+        tiberium = []
+        for row in range(Constants.BASE_ROWS):
+            for col in range(Constants.BASE_COLUMNS):
+                match arr[row,col]:
+                    case Constants.TIBERIUM:
+                        tiberium.append((row,col))
+                    case Constants.CRYSTAL:
+                        crystal.append((row, col))
+                    case Constants.EMPTY:
+                        pass
+                    case _:
+                        self.set_building((row, col), arr[row, col], suppress_refresh_rate=True)
+        self.set_resources(crystal_coords=crystal, tiberium_coords=tiberium)
 
     def __create_field(self, dtype):
         """
@@ -154,16 +176,16 @@ class PowerField:
         """    
         if tiberium_coords is not None:
             for coord in tiberium_coords:
-                self.__resource[coord[0], coord[1]] = PowerField.TIBERIUM
+                self.__resource[coord[0], coord[1]] = Constants.TIBERIUM
 
         if crystal_coords is not None:
             for coord in crystal_coords:
-                self.__resource[coord[0], coord[1]] = PowerField.CRYSTAL
+                self.__resource[coord[0], coord[1]] = Constants.CRYSTAL
                 for c in enumerate_adjacent_coords(self.__adjacent_crystal, coord):
                     self.__adjacent_crystal[c[0], c[1]] += 1
             self._refresh_rate()
 
-    def set_building(self, coord :tuple, building_type :int):
+    def set_building(self, coord :tuple, building_type :int, suppress_refresh_rate :bool = False):
         """
         Places accu(s) at the given coordinate(s)
         Updates fields __accu, __adjacent_accu and __rate
@@ -173,27 +195,30 @@ class PowerField:
         - present: True -> place accu, False-> remove accu
         """        
         row, col = coord[0], coord[1]
-        clear_accu = self.__building[row, col] == PowerField.ACCU
+        clear_accu = self.__building[row, col] == Constants.ACCU
         self.__building[row, col] = building_type
-        if building_type == PowerField.ACCU or clear_accu:
+        if building_type == Constants.ACCU or clear_accu:
             for c in enumerate_adjacent_coords(self.__adjacent_crystal, coord):
-                self.__adjacent_accu[c[0], c[1]] += 1 if building_type==PowerField.ACCU else -1
+                self.__adjacent_accu[c[0], c[1]] += 1 if building_type==Constants.ACCU else -1
 
-        self._refresh_rate()
+        if not suppress_refresh_rate:
+            self._refresh_rate()
 
     def set_accus(self, coords :list, present :bool = True):
         if present:
             for coord in coords:
-                self.set_building(coord, PowerField.ACCU)
+                self.set_building(coord, Constants.ACCU, suppress_refresh_rate=True)
         else:
             for coord in coords:
-                self.set_building(coord, PowerField.EMPTY)
+                self.set_building(coord, Constants.EMPTY, suppress_refresh_rate=True)
+
+        self._refresh_rate()
 
     def set_optimal_powerplants(self, num_powerplants :int):
         categories = self.get_field_categories(num_powerplants)
         for cat in categories:
             for coord in cat.coords:
-                self.__building[coord[0], coord[1]] = PowerField.POWERPLANT
+                self.__building[coord[0], coord[1]] = Constants.POWERPLANT
 
     def _refresh_rate(self):
         """
@@ -218,7 +243,7 @@ class PowerField:
         categories :dict[int, PowerPlantFieldCategory] = dict()
         for row in range(Constants.BASE_ROWS):
             for col in range(Constants.BASE_COLUMNS):
-                if self.__resource[row, col] == PowerField.EMPTY and self.__building[row, col] == PowerField.EMPTY:
+                if self.__resource[row, col] == Constants.EMPTY and self.__building[row, col] == Constants.EMPTY:
                     rate = self.__rate[row, col]
                     if rate in categories.keys():
                         categories[rate].num_fields += 1
@@ -245,7 +270,7 @@ class PowerField:
         return sum([int(cat.rate)*int(cat.num_fields) for cat in self.get_field_categories(powerplants)])
 
     def get_empty_fields(self):
-        return np.argwhere(self.__resource + self.building == PowerField.EMPTY)
+        return np.argwhere(self.__resource + self.building == Constants.EMPTY)
 
     def __str__(self):
         s = ""
@@ -253,14 +278,14 @@ class PowerField:
             for col in range(Constants.BASE_COLUMNS):
                 ch = '.'
                 match self.__resource[row, col]:                    
-                    case self.TIBERIUM:
+                    case Constants.TIBERIUM:
                         ch = 'T'
-                    case self.CRYSTAL:
+                    case Constants.CRYSTAL:
                         ch = 'C'
                 match self.__building[row, col]:
-                    case self.ACCU:
+                    case Constants.ACCU:
                         ch = 'A'
-                    case self.POWERPLANT:
+                    case Constants.POWERPLANT:
                         ch = 'P'                    
                 s += ch + ' '
             s += '\n'

@@ -1,4 +1,4 @@
-from game_mechanics import PowerField
+from game_mechanics import PowerField, Constants
 from collections import namedtuple
 import numpy as np
 
@@ -87,16 +87,16 @@ def __search_recursive(pf :PowerField, solutions :list[SolutionItem], top_n :int
     # these results are stored in an ordered list [([coord], rate)]
     coord_rate_map :list[PathNode] = list()
     for field in empty_fields:        
-        pf.set_building(field, PowerField.ACCU)        
+        pf.set_building(field, Constants.ACCU)        
         rate = pf.get_total_rate(n_total_buildings - 1 - len(path))
         coord_rate_map.append(PathNode(coord=field, power_rate=rate))
-        pf.set_building(field, PowerField.EMPTY)
+        pf.set_building(field, Constants.EMPTY)
     
     # order by power rate descending, take top top_n entries (where equal rates count as one)
     next_coords :list[PathNode] = get_top_n_ranks(coord_rate_map, top_n, selector=lambda x: x.power_rate)
     for item in next_coords:
         # set accu and append coord to path
-        pf.set_building(item.coord, PowerField.ACCU)
+        pf.set_building(item.coord, Constants.ACCU)
         path.append(item)
 
         # add to solution if it's better than what we have
@@ -109,5 +109,5 @@ def __search_recursive(pf :PowerField, solutions :list[SolutionItem], top_n :int
         if len(path) == 1 or path[-1].power_rate > path[-2].power_rate:
             __search_recursive(pf, solutions, top_n, n_total_buildings, path)
 
-        pf.set_building(item.coord, PowerField.EMPTY)
+        pf.set_building(item.coord, Constants.EMPTY)
         path.pop()
