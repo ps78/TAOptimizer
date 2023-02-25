@@ -19,11 +19,11 @@ def sample_with_cnctaopt():
     p.assign(pf)
     print(p.generate_url())
 
-def sample_with_base_scanner_image(img):
+def sample_with_base_scanner_image(img_in, img_out):
     ib = Image2Base("anchor.png")
     
     results = list()
-    for idx, layout in enumerate(ib.find_layouts(img)):
+    for idx, layout in enumerate(ib.find_layouts(img_in)):
         pf = PowerField(layout[0])        
         solution = search(pf, top_n=1, n_total_buildings=38)[0]
         rate = solution.power_rate 
@@ -32,6 +32,6 @@ def sample_with_base_scanner_image(img):
         center_coord = layout[1]
         results.append( (center_coord, rate) )
     
-    ib.write_rates_to_image(img, 'output.png', results)
+    ib.write_rates_to_image(img_in, img_out, results)
 
-sample_with_base_scanner_image("layouts.png")
+sample_with_base_scanner_image("layouts.png", "output.png")

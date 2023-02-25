@@ -94,14 +94,16 @@ class Image2Base:
         for item in data:
             coord = (int(item[0][0]-self.__layout_dim[0]/2), item[0][1])
             rate = f"{item[1]/1000000000.0:.3f}G/h"            
-            cv2.putText(img, text=rate, org=coord, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=(255,255,255), thickness=3, lineType=cv2.LINE_AA)
-
+            
             if item[1] == max_rate:
-                highlight_color = (0,0,255)
+                outer_color = (0,255,255)
+                inner_color = (0,0,255)
             else:
-                highlight_color = (0,0,0)
-
-            cv2.putText(img, text=rate, org=coord, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=highlight_color, thickness=1, lineType=cv2.LINE_AA)
+                outer_color = (255,255,255)
+                inner_color = (0,0,0)
+            
+            cv2.putText(img, text=rate, org=coord, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=outer_color, thickness=3, lineType=cv2.LINE_AA)
+            cv2.putText(img, text=rate, org=coord, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=inner_color, thickness=1, lineType=cv2.LINE_AA)
 
         cv2.imwrite(output_image, img)
         print(f"Best layout found has {max_rate:,} G/h. Results written to {output_image}")
