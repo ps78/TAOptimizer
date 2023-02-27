@@ -106,4 +106,3 @@ class Image2Base:
             cv2.putText(img, text=rate, org=coord, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.8, color=inner_color, thickness=1, lineType=cv2.LINE_AA)
 
         cv2.imwrite(output_image, img)
-        print(f"Best layout found has {max_rate:,} G/h. Results written to {output_image}")

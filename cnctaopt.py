@@ -1,28 +1,25 @@
 import re
 from urllib import request
 from urllib.parse import urlparse, unquote, quote
-from game_mechanics import PowerField, Constants
+from game_mechanics import BaseLayout, Constants
+import numpy as np
 
 class CncTaOptParser:
     """
     Class which provides methods to read a CncTaOpt-url and parse the 
     layout from the url-query parameter
+
+    Parameters:
+        - url: url from which to load this instance, optional
+        - field: 2D numpy array from which to load this instance, optional
     """    
     BASE_URL = "https://www.cnctaopt.com/index.html"
 
-    # Coordinates of the tiberium fields, stored as list
-    tiberium_coords = None
+    @property
+    def field(self) -> np.ndarray:
+        return np.copy(self.__field)
 
-    # Coordinates of the crystal fields, stored as list
-    crystal_coords = None
-
-    # Coordinates of the accumulators, stored as list
-    accu_coords = None
-
-    # Coordinates of power plants, stored as list
-    powerplant_coords = None
-
-    def __init__(self, url): 
+    def __init__(self, url :str=None, field :np.ndarray=None): 
         """
         Constructor, reads the given url and populates the tib/crystal coordinates
         """
@@ -36,21 +33,22 @@ class CncTaOptParser:
         self.max_level = 65
         self.x_coord = 550
         self.y_coord = 550
-        self.tiberium_coords = list()
-        self.crystal_coords = list()
-        self.accu_coords = list()
-        self.powerplant_coords = list()
-        self.parse(url)
+        
+        if field is not None:
+            self.assign(field)
+        else:
+            self.__field = Constants.create_field()
+
+        if url is not None:
+            self.parse(url)
+
+    def assign(self, field :np.ndarray):
+        self.__field = field
 
     def parse(self, url):
         """
         Parses the given url, also called by the constructor
         """
-        self.tiberium_coords.clear()
-        self.crystal_coords.clear()
-        self.accu_coords.clear()
-        self.powerplant_coords.clear()
-
         response = request.urlopen(url)
         if response.getcode() != 200:
             print("Error reading url")
@@ -61,45 +59,54 @@ class CncTaOptParser:
         layout_par = params[4]
 
         tokens = re.findall('\d+[a-z]|c|t|\\.', layout_par)
-        row = 0
-        col = 0
+        row, col = 0, 0
         for token in tokens[:Constants.BASE_COLUMNS*Constants.BASE_ROWS]:            
             match token[-1]:
                 case 'c' | 'n':
-                    self.crystal_coords.append((row, col))
-                case 't' | 'j':
-                    self.tiberium_coords.append((row, col))
+                    self.__field[row, col] = Constants.CRYSTAL
+                case 'n':
+                    self.__field[row, col] = Constants.CRYSTAL | Constants.HARVESTER
+                case 't':
+                    self.__field[row, col] = Constants.TIBERIUM
+                case 'j':
+                    self.__field[row, col] = Constants.TIBERIUM | Constants.HARVESTER
                 case 'a':
-                    self.accu_coords.append((row, col))
+                    self.__field[row, col] = Constants.ACCU
                 case 'p':
-                    self.powerplant_coords.append((row, col))
+                    self.__field[row, col] = Constants.POWERPLANT
+                case _:
+                    self.__field[row, col] = Constants.EMPTY
             
             if col == Constants.BASE_COLUMNS-1:
                 row += 1
                 col = 0
             else:
                 col += 1
-
             if row == Constants.BASE_ROWS:
                 break
 
     def generate_url(self):
+        """
+        Generates an URL to cncTAopt which contains all information of the instance in 
+        the query parameters of the url
+        """
+        # create base layout string
+        base_layout_str = ''
+        for row in range(Constants.BASE_ROWS):
+            for col in range(Constants.BASE_COLUMNS):
+                match self.__field[row, col]:
+                    case Constants.TIBERIUM:
+                        base_layout_str += 't'
+                    case Constants.CRYSTAL:
+                        base_layout_str += 'c'
+                    case Constants.ACCU:
+                        base_layout_str += '65a'
+                    case Constants.POWERPLANT:
+                        base_layout_str += '65p'
 
         # create empty defense and offense layout strings    
         defense_layout_str = '.' * (Constants.BASE_ROWS * Constants.BASE_COLUMNS)
         offense_layout_str = '.' * (Constants.BASE_OFFENSE_ROWS * Constants.BASE_COLUMNS)
-
-        # create base layout string
-        base_layout = [Constants.BASE_COLUMNS * ['.'] for i in range(Constants.BASE_ROWS)]        
-        for c in self.tiberium_coords:
-            base_layout[c[0]][c[1]] = "t"
-        for c in self.crystal_coords:
-            base_layout[c[0]][c[1]] = "c"
-        for c in self.accu_coords:
-            base_layout[c[0]][c[1]] = "65a"
-        for c in self.powerplant_coords:
-            base_layout[c[0]][c[1]] = "65p"
-        base_layout_str = "".join(["".join(base_layout[i]) for i in range(Constants.BASE_ROWS)])
 
         # define the query parameters of the url        
         query_pars = list()
@@ -116,24 +123,3 @@ class CncTaOptParser:
         query_pars.append(f"ML={self.max_level}")
         
         return self.BASE_URL + '?' + '~'.join([quote(par) for par in query_pars])
-
-    def assign(self, pf :PowerField):
-        self.tiberium_coords.clear()
-        self.crystal_coords.clear()
-        self.accu_coords.clear()
-        self.powerplant_coords.clear()
-
-        for row in range(Constants.BASE_ROWS):
-            for col in range(Constants.BASE_COLUMNS):
-                match pf.resource[row,col]:
-                    case PowerField.TIBERIUM:
-                        self.tiberium_coords.append((row,col))
-                    case PowerField.CRYSTAL:
-                        self.crystal_coords.append((row, col))
-                    
-                match pf.building[row, col]:
-                    case PowerField.ACCU:
-                        self.accu_coords.append((row, col))
-                    case PowerField.POWERPLANT:
-                        self.powerplant_coords.append((row, col))
-                    
