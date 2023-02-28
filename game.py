@@ -116,18 +116,32 @@ class BaseLayout:
         """
         return self.__potential_power_rate
 
-    def __init__(self, copy_from_array :np.ndarray = None):
+    def __init__(self, copy_from_array :np.ndarray=None, filter_field_type :int=None):
         self.__adjacent_crystal = Constants.create_field()
         self.__adjacent_accu = Constants.create_field()        
         self.__potential_power_rate = Constants.create_field(np.int64)
         self.__field = Constants.create_field()        
         if copy_from_array is not None:
-            self.assign(copy_from_array)
+            self.assign(copy_from_array, filter_field_type)
         else:
             self._refresh_potential_power_rate()
+                   
+    def copy(self):
+        """
+        Creates a deep copy of the object
+        """
+        b = BaseLayout()
+        b.__adjacent_crystal = np.copy(self.__adjacent_crystal)
+        b.__adjacent_accu = np.copy(self.__adjacent_accu)        
+        b.__potential_power_rate = np.copy(self.__potential_power_rate)
+        b.__field = np.copy(self.__field)                  
+        return b
 
-    def assign(self, copy_from_array :np.ndarray):
-        self.__field = np.copy(copy_from_array)
+    def assign(self, copy_from_array :np.ndarray, filter_field_type :int=None):
+        if filter_field_type is None:
+            self.__field = np.copy(copy_from_array)
+        else:
+            self.__field = copy_from_array & filter_field_type
 
         self.__adjacent_crystal = Constants.create_field()
         for coord in np.argwhere(self.__field == Constants.CRYSTAL):        
@@ -222,7 +236,25 @@ class BaseLayout:
                 self.__adjacent_accu[c[0], c[1]] += delta_accu[coord[0], coord[1]]
 
         if need_power_rate_refresh:
-            self._refresh_potential_power_rate()
+            self._refresh_potential_power_rate() 
+
+    def set_accu(self, coord :tuple[int, int]):
+        """
+        Faster version of set(Constants.ACCU, coord)
+        """
+        self.__field[coord[0], coord[1]] = Constants.ACCU
+        for c in self.enumerate_adjacent_coords(self.__field, coord):
+            self.__adjacent_accu[c[0], c[1]] += 1
+        self._refresh_potential_power_rate()
+
+    def remove_accu(self, coord :tuple[int, int]):
+        """
+        Faster version of set(Constants.EMPTY, coord) to remove an accu
+        """
+        self.__field[coord[0], coord[1]] = Constants.EMPTY
+        for c in self.enumerate_adjacent_coords(self.__field, coord):
+            self.__adjacent_accu[c[0], c[1]] -= 1
+        self._refresh_potential_power_rate()
 
     def set_optimal_powerplants(self, num_powerplants :int):
         """

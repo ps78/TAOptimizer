@@ -1,6 +1,6 @@
-from game_mechanics import *
+from game import BaseLayout, Constants
 from cnctaopt import CncTaOptParser
-from searching import search
+from searching import DfsSearch
 import time
 from image2base import *
 from pathlib import Path
@@ -8,13 +8,14 @@ import numpy as np
 
 def sample_with_cnctaopt(cnctaopt_url :str, n_total_buildings :int=38, top_n :int=1):
     cnctaopt = CncTaOptParser(cnctaopt_url)
-    lay = BaseLayout(cnctaopt.field)
+    lay = BaseLayout(cnctaopt.field, Constants.TIBERIUM | Constants.CRYSTAL)
 
     print(f"Analyzing layout {cnctaopt_url}, placing {n_total_buildings} buildings and using top_n={top_n}")
 
     # find solution
     start_time = time.time()
-    solutions = search(lay, top_n=top_n, n_total_buildings=n_total_buildings)
+    search = DfsSearch(lay)
+    solutions = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)
     solution = solutions[0] # solutions are identical in terms of power rate, pick first
 
     # print stats
@@ -42,8 +43,9 @@ def sample_with_base_scanner_image(img_in :str, n_total_buildings :int=38, top_n
     best_solution = None
     best_layout = None
     for idx, layout in enumerate(layouts):
-        pf = BaseLayout(layout[0])        
-        solution = search(pf, top_n=top_n, n_total_buildings=n_total_buildings)[0]
+        lay = BaseLayout(layout[0])        
+        search = DfsSearch(lay)
+        solution = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)[0]
         rate = solution.power_rate 
         print(f"Layout {idx:>2}: {rate:,}/h / {len(solution.path)} accus")
 
@@ -66,20 +68,19 @@ def sample_with_base_scanner_image(img_in :str, n_total_buildings :int=38, top_n
     print(f"Results written to {img_out}")
 
     # generate CncTAOpt-link to best layout
-    pf = BaseLayout(best_layout)
-    pf.set_accus([node.coord for node in best_solution.path])
-    pf.set_optimal_powerplants(n_total_buildings - len(best_solution.path))
-    cnctaopt = CncTaOptParser()
-    cnctaopt.assign(pf)
+    lay = BaseLayout(copy_from_array=best_layout)
+    lay.set(Constants.ACCU, np.array([node.coord for node in best_solution.path], dtype=np.int32))
+    lay.set_optimal_powerplants(n_total_buildings - len(best_solution.path))
+    cnctaopt = CncTaOptParser(field = lay.field)
     print("CncTAOpt-Url to best layout:")
     print(cnctaopt.generate_url())
 
+sample_with_base_scanner_image("images/layouts_rivendell.png", n_total_buildings=38, top_n=1)
 
-sample_with_base_scanner_image("images/layouts_van16.png", n_total_buildings=38, top_n=1)
+#sample_with_cnctaopt("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1) # 0.18s, 14.117 G/h
+#sample_with_cnctaopt("https://cnctaopt.com/XD7Uk", n_total_buildings=38, top_n=1) # 1.17s, 13.956 G/h
+#sample_with_cnctaopt("https://cnctaopt.com/XD7Uk", n_total_buildings=38, top_n=2) # 98s, 14.020 G/h , [696:673]
 
-# best layout so far (14.12G/h)
-#sample_with_cnctaopt("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1)
-
-# example where top_n=1 and top_n=2 are very different:
+# example where top_n=1 and top_n=2 are very different:111
 #sample_with_cnctaopt("https://cnctaopt.com/UsO7C", n_total_buildings=38, top_n=1)
 #sample_with_cnctaopt("https://cnctaopt.com/UsO7C", n_total_buildings=38, top_n=2)

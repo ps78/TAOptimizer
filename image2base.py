@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from game_mechanics import Constants
+from game import Constants
 
 class Image2Base:
     """
@@ -89,6 +89,16 @@ class Image2Base:
             return Constants.EMPTY
 
     def write_rates_to_image(self, input_image :str, output_image :str, data :list[tuple]):
+        """
+        Write the rates provided in data into the impage provided by input_image and
+        stores the result in the output-image
+
+        Parameters:
+            - input_image: file name of the image to read
+            - output_image: file name of the image file to create with the rates 
+            - data: list containing one element for each layout in the input image
+                    each element in the list is a tuple <coord, rate>
+        """
         img = cv2.imread(input_image)
         max_rate = max([item[1] for item in data])
         for item in data:

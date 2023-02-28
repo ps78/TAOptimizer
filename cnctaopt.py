@@ -1,7 +1,7 @@
 import re
 from urllib import request
 from urllib.parse import urlparse, unquote, quote
-from game_mechanics import BaseLayout, Constants
+from game import BaseLayout, Constants
 import numpy as np
 
 class CncTaOptParser:
@@ -43,7 +43,7 @@ class CncTaOptParser:
             self.parse(url)
 
     def assign(self, field :np.ndarray):
-        self.__field = field
+        self.__field = np.copy(field)
 
     def parse(self, url):
         """
@@ -103,6 +103,8 @@ class CncTaOptParser:
                         base_layout_str += '65a'
                     case Constants.POWERPLANT:
                         base_layout_str += '65p'
+                    case _:
+                        base_layout_str += '.'
 
         # create empty defense and offense layout strings    
         defense_layout_str = '.' * (Constants.BASE_ROWS * Constants.BASE_COLUMNS)

@@ -1,4 +1,4 @@
-from game_mechanics import BaseLayout, Constants
+from game import BaseLayout, Constants
 from collections import namedtuple
 import numpy as np
 
@@ -22,7 +22,7 @@ class SolutionItem:
         self.path = path
 
     def __str__(self):
-        s = f"Solution with {len(self.path)} accus, power rate: {self.power_rate:,}\n"
+        s = f"Solution with {len(self.path)} accus, power rate: {self.power_rate:,})\n"
         for node in self.path:
             s += f"   {node}\n"
         return s
@@ -56,66 +56,56 @@ def get_top_n_ranks(lst :list, top_n :int, selector = None) -> list:
         
     return result
 
-global __search_recursion_counter
-
-def search(lay :BaseLayout, top_n :int = 1, n_total_buildings :int = 38) -> list[SolutionItem]:
+class DfsSearch():
     """
-    Searches the given layout for the optimal placement of accus
-
-    Parameters:
-    - lay               : A game layout which should only contain tiberium/crystal fields 
-                          and no buildings
-    - n_total_buildings : number of accus + power plants to place overall
-    
-    Returns:
-    
-    A list of SolutionItems representing the optimal solutions. I.e. all solutions returned will
-    have an identical power rate, but different paths (which could be identical placements in 
-    different order)
+    A depth-first tree search implementation
     """
-    global __search_recursion_counter
-    __search_recursion_counter = 0
+    def __init__(self, layout :BaseLayout):
+        self.__layout :BaseLayout = layout.copy()
+        self.__recursion = 0
 
-    solutions :list[SolutionItem] = list()
-    __search_recursive(lay, solutions, top_n, n_total_buildings)
-    print(f"Recursion counter: {__search_recursion_counter}")
-    return solutions
+    def find_best_power(self, top_n :int = 1, n_total_buildings :int = 38) -> list[SolutionItem]:
+        solutions :list[SolutionItem] = list()
+        self.__find_best_power_recursive(solutions, top_n, n_total_buildings)        
+        return solutions
 
-def __search_recursive(lay :BaseLayout, solutions :list[SolutionItem], top_n :int = 1, n_total_buildings :int = 38, path :list[PathNode] = list()):
-    """
-    Recursive part of the search() function, do not call directly
-    """
-    global __search_recursion_counter
-    __search_recursion_counter += 1
+    def __find_best_power_recursive(self, solutions :list[SolutionItem], top_n :int = 1, n_total_buildings :int = 38, path :list[PathNode] = list()):
+        """
+        Recursive part of the search() function, do not call directly
+        """
+        # get all fields where we can put an accu    
+        empty_fields = self.__layout.get_empty_fields()
+        
+        # set next accu on every possible field and compute the resulting power rate
+        # these results are stored in an ordered list [([coord], rate)]
+        coord_rate_map :list[PathNode] = list()
+        for field in empty_fields:        
+            #self.__layout.set(Constants.ACCU, field)
+            self.__layout.set_accu(field)
+            rate = self.__layout.get_total_power_rate(n_total_buildings - 1 - len(path))
+            coord_rate_map.append(PathNode(coord=field, power_rate=rate))
+            #self.__layout.set(Constants.EMPTY, field)
+            self.__layout.remove_accu(field)
+        
+        # order by power rate descending, take top top_n entries (where equal rates count as one)
+        next_coords :list[PathNode] = get_top_n_ranks(coord_rate_map, top_n, selector=lambda x: x.power_rate)
+        for item in next_coords:
+            # set accu and append coord to path
+            #self.__layout.set(Constants.ACCU, item.coord)
+            self.__layout.set_accu(item.coord)
+            path.append(item)
 
-    # get all fields where we can put an accu    
-    empty_fields = lay.get_empty_fields()
-    
-    # set next accu on every possible field and compute the resulting power rate
-    # these results are stored in an ordered list [([coord], rate)]
-    coord_rate_map :list[PathNode] = list()
-    for field in empty_fields:        
-        lay.set(Constants.ACCU, field)
-        rate = lay.get_total_power_rate(n_total_buildings - 1 - len(path))
-        coord_rate_map.append(PathNode(coord=field, power_rate=rate))
-        lay.set(Constants.EMPTY, field)
-    
-    # order by power rate descending, take top top_n entries (where equal rates count as one)
-    next_coords :list[PathNode] = get_top_n_ranks(coord_rate_map, top_n, selector=lambda x: x.power_rate)
-    for item in next_coords:
-        # set accu and append coord to path
-        lay.set(Constants.ACCU, item.coord)
-        path.append(item)
+            # if we found a solution that's better than what we have, clear all solutions and add it
+            # if it's identical, just add it
+            if not solutions or item.power_rate >= solutions[0].power_rate:
+                if not solutions or item.power_rate > solutions[0].power_rate:
+                    solutions.clear()                
+                solutions.append(SolutionItem(power_rate=item.power_rate, path=path.copy()))
 
-        # add to solution if it's better than what we have
-        if not solutions or item.power_rate >= solutions[0].power_rate:
-            if not solutions or item.power_rate > solutions[0].power_rate:
-                solutions.clear()                
-            solutions.append(SolutionItem(power_rate=item.power_rate, path=path.copy()))
+            # start recursion, only if solution is getting better
+            if len(path) == 1 or path[-1].power_rate > path[-2].power_rate:
+                self.__find_best_power_recursive(solutions, top_n, n_total_buildings, path)
 
-        # start recursion, only if solution is getting better
-        if len(path) == 1 or path[-1].power_rate > path[-2].power_rate:
-            __search_recursive(lay, solutions, top_n, n_total_buildings, path)
-
-        lay.set(Constants.EMPTY, item.coord)
-        path.pop()
+            #self.__layout.set(Constants.EMPTY, item.coord)
+            self.__layout.remove_accu(item.coord)
+            path.pop()
