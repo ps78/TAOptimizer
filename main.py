@@ -35,7 +35,7 @@ def sample_with_cnctaopt(cnctaopt_url :str, n_total_buildings :int=38, top_n :in
     print(cnctaopt.generate_url())
 
 def sample_with_base_scanner_image(img_in :str, n_total_buildings :int=38, top_n :int=1):
-    ib = Image2Base("images/anchor.png")
+    ib = Image2Base()
 
     start_time = time.time()    
     results = list()
