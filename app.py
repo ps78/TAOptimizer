@@ -1,7 +1,7 @@
 import numpy as np
 import time
 
-from searching import DfsSearch, SearchResult, SolutionItem, PathNode
+from searching import DfsSearch, SearchResult, SolutionItem
 from game import BaseLayout, Constants
 from cnctaopt import CncTaOptParser
 from image2base import Image2Base, ImageLayout
@@ -68,17 +68,15 @@ def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :
     best_result :SearchResult = None
     best_layout :ImageLayout = None
     for idx, layout in enumerate(layouts):
-        lay = BaseLayout(layout.data)
-        search = DfsSearch(lay)
+        search = DfsSearch(BaseLayout(layout.data))
         result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)
         solution = result.solutions[0]
-        rate = solution.power_rate 
-        print(f"  Layout {idx:>2}: {rate:,}/h / {len(solution.path)} accus")
+        print(f"  Layout {idx:>2}: {solution.power_rate:,}/h / {len(solution.path)} accus")
 
         center_coord = layout.coord
-        results.append( (center_coord, rate) )
+        results.append( (center_coord, solution.power_rate) )
 
-        if best_result is None or best_result.solutions[0].power_rate < rate:
+        if best_result is None or best_result.solutions[0].power_rate < solution.power_rate:
             best_result = result
             best_layout = layout
 

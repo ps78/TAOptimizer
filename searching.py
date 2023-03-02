@@ -1,6 +1,4 @@
-from game import BaseLayout, Constants
-from collections import namedtuple
-import numpy as np
+from game import BaseLayout
 import time
 
 class PathNode:    
@@ -34,18 +32,32 @@ class SearchResult:
     """
     @property
     def solutions(self) -> list[SolutionItem]:
+        """
+        list of solution items
+        """
         return self.__solutions
 
     @property
     def runtime(self) -> float:
+        """
+        Total runtime in seconds
+        this is automatically calculated as time difference between
+        the last solution added and the constructor call        
+        """
         return self.__runtime
 
     @property
     def num_solutions(self) -> int:
+        """
+        Number of solutions
+        """
         return len(self.__solutions)
 
     @property
     def iterations(self) -> int:
+        """
+        Number of iterations used to find the solution (calls of the recursive search function)
+        """
         return self.__iterations
 
     def __init__(self):
@@ -55,13 +67,22 @@ class SearchResult:
         self.__start = time.time()
 
     def add_solution(self, sol :SolutionItem):
+        """
+        Adds an additional solution and updates the runtime
+        """
         self.__solutions.append(sol)
         self.__runtime = time.time()-self.__start
 
     def clear_solutions(self):
+        """
+        Remove all solutions
+        """
         self.__solutions.clear()
 
     def inc_iterations(self):
+        """
+        Increment the iteration counter by one
+        """
         self.__iterations += 1
 
     def __str__(self) -> str:
