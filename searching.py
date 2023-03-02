@@ -1,6 +1,7 @@
 from game import BaseLayout, Constants
 from collections import namedtuple
 import numpy as np
+import time
 
 class PathNode:    
     """
@@ -26,6 +27,45 @@ class SolutionItem:
         for node in self.path:
             s += f"   {node}\n"
         return s
+
+class SearchResult:
+    """
+    The result of a search. Can contain multiple solutions
+    """
+    @property
+    def solutions(self) -> list[SolutionItem]:
+        return self.__solutions
+
+    @property
+    def runtime(self) -> float:
+        return self.__runtime
+
+    @property
+    def num_solutions(self) -> int:
+        return len(self.__solutions)
+
+    @property
+    def iterations(self) -> int:
+        return self.__iterations
+
+    def __init__(self):
+        self.__solutions :list[SolutionItem] = []
+        self.__runtime :int = 0
+        self.__iterations :int = 0
+        self.__start = time.time()
+
+    def add_solution(self, sol :SolutionItem):
+        self.__solutions.append(sol)
+        self.__runtime = time.time()-self.__start
+
+    def clear_solutions(self):
+        self.__solutions.clear()
+
+    def inc_iterations(self):
+        self.__iterations += 1
+
+    def __str__(self) -> str:
+        return f"Found {self.num_solutions} solution(s) in {self.runtime:.3f} sec ({self.__iterations:,} iterations)"
 
 def get_top_n_ranks(lst :list, top_n :int, selector = None) -> list:
     """
@@ -64,15 +104,17 @@ class DfsSearch():
         self.__layout :BaseLayout = layout.copy()
         self.__recursion = 0
 
-    def find_best_power(self, top_n :int = 1, n_total_buildings :int = 38) -> list[SolutionItem]:
-        solutions :list[SolutionItem] = list()
-        self.__find_best_power_recursive(solutions, top_n, n_total_buildings)        
-        return solutions
+    def find_best_power(self, top_n :int = 1, n_total_buildings :int = 38) -> SearchResult:
+        search_result = SearchResult()        
+        self.__find_best_power_recursive(search_result, top_n, n_total_buildings)        
+        return search_result
 
-    def __find_best_power_recursive(self, solutions :list[SolutionItem], top_n :int = 1, n_total_buildings :int = 38, path :list[PathNode] = list()):
+    def __find_best_power_recursive(self, search_result :SearchResult, top_n :int = 1, n_total_buildings :int = 38, path :list[PathNode] = list()):
         """
         Recursive part of the search() function, do not call directly
         """
+        search_result.inc_iterations()
+
         # get all fields where we can put an accu    
         empty_fields = self.__layout.get_empty_fields()
         
@@ -97,14 +139,14 @@ class DfsSearch():
 
             # if we found a solution that's better than what we have, clear all solutions and add it
             # if it's identical, just add it
-            if not solutions or item.power_rate >= solutions[0].power_rate:
-                if not solutions or item.power_rate > solutions[0].power_rate:
-                    solutions.clear()                
-                solutions.append(SolutionItem(power_rate=item.power_rate, path=path.copy()))
+            if search_result.num_solutions==0 or item.power_rate >= search_result.solutions[0].power_rate:
+                if search_result.num_solutions>0 and item.power_rate > search_result.solutions[0].power_rate:
+                    search_result.clear_solutions()
+                search_result.add_solution(SolutionItem(power_rate=item.power_rate, path=path.copy()))
 
             # start recursion, only if solution is getting better
             if len(path) == 1 or path[-1].power_rate > path[-2].power_rate:
-                self.__find_best_power_recursive(solutions, top_n, n_total_buildings, path)
+                self.__find_best_power_recursive(search_result, top_n, n_total_buildings, path)
 
             #self.__layout.set(Constants.EMPTY, item.coord)
             self.__layout.remove_accu(item.coord)

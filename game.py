@@ -1,6 +1,6 @@
+from __future__ import annotations
 import numpy as np
 import numpy.typing as npt
-from collections import namedtuple
 
 class Constants:
     """
@@ -73,6 +73,8 @@ class PowerPlantFieldCategory:
     - num_field :int    Total number of fields of this category in the layout
     - power_rate :int   Power production rate per hour of one field of this category
     """
+    MAX_POWERPLANTS_PER_CATEGORY :int = 60
+
     def __init__(self, rate :int, num_fields :int, coords :npt.ArrayLike):
         self.rate :int = rate
         self.num_fields :int = num_fields
@@ -126,7 +128,7 @@ class BaseLayout:
         else:
             self._refresh_potential_power_rate()
                    
-    def copy(self):
+    def copy(self) -> BaseLayout:
         """
         Creates a deep copy of the object
         """
@@ -145,18 +147,18 @@ class BaseLayout:
 
         self.__adjacent_crystal = Constants.create_field()
         for coord in np.argwhere(self.__field == Constants.CRYSTAL):        
-            for c in self.enumerate_adjacent_coords(self.__field, coord):
+            for c in self.enumerate_adjacent_coords(coord):
                 self.__adjacent_crystal[c[0], c[1]] += 1
 
         self.__adjacent_accu = Constants.create_field()
         for coord in np.argwhere(self.__field == Constants.ACCU):
-            for c in self.enumerate_adjacent_coords(self.__field, coord):
+            for c in self.enumerate_adjacent_coords(coord):
                 self.__adjacent_accu[c[0], c[1]] += 1
 
         self._refresh_potential_power_rate()
 
     @staticmethod
-    def enumerate_adjacent_coords(arr :np.ndarray, coord :npt.ArrayLike) -> np.ndarray:
+    def enumerate_adjacent_coords(coord :npt.ArrayLike) -> np.ndarray:
         """
         Enumerates the coordinates of the 3x3 field with coord in the center, 
         but does not return the center coordinate.
@@ -172,9 +174,9 @@ class BaseLayout:
         """
         row, col = coord[0], coord[1]
         start_row = 0 if row == 0 else row-1
-        end_row =  arr.shape[0] if row == arr.shape[0]-1 else row+2
+        end_row =  Constants.BASE_ROWS if row == Constants.BASE_ROWS-1 else row+2
         start_col = 0 if col == 0 else col-1
-        end_col =  arr.shape[1] if col == arr.shape[1]-1 else col+2
+        end_col = Constants.BASE_COLUMNS if col == Constants.BASE_COLUMNS-1 else col+2
         coords = np.empty(((end_row-start_row)*(end_col-start_col)-1, 2), dtype=np.int32)
         idx = 0
         for r in range(start_row, end_row):
@@ -214,7 +216,7 @@ class BaseLayout:
         before = np.copy(self.__field)        
 
         if len(coords.shape) == 1:
-            coords = np.array([coords])
+            coords = np.array([coords], dtype=np.int32)
 
         if overlay:
             self.__field[coords[:,0], coords[:,1]] |= field_type
@@ -226,13 +228,13 @@ class BaseLayout:
         delta_crystal = (self.__field & Constants.CRYSTAL != 0).astype(int) - (before & Constants.CRYSTAL != 0).astype(int)
         for coord in np.argwhere(delta_crystal != 0):
             need_power_rate_refresh = True
-            for c in self.enumerate_adjacent_coords(self.__field, coord):
+            for c in self.enumerate_adjacent_coords(coord):
                 self.__adjacent_crystal[c[0], c[1]] += delta_crystal[c[0], c[1]]
 
         delta_accu = (self.__field & Constants.ACCU != 0).astype(int) - (before & Constants.ACCU != 0).astype(int)
         for coord in np.argwhere(delta_accu != 0):
             need_power_rate_refresh = True
-            for c in self.enumerate_adjacent_coords(self.__field, coord):
+            for c in self.enumerate_adjacent_coords(coord):
                 self.__adjacent_accu[c[0], c[1]] += delta_accu[coord[0], coord[1]]
 
         if need_power_rate_refresh:
@@ -242,9 +244,9 @@ class BaseLayout:
         """
         Faster version of set(Constants.ACCU, coord)
         """
-        self.__field[coord[0], coord[1]] = Constants.ACCU
-        for c in self.enumerate_adjacent_coords(self.__field, coord):
-            self.__adjacent_accu[c[0], c[1]] += 1
+        self.__field[coord[0], coord[1]] = Constants.ACCU        
+        coords = self.enumerate_adjacent_coords(coord)
+        self.__adjacent_accu[coords[:,0], coords[:,1]] += 1
         self._refresh_potential_power_rate()
 
     def remove_accu(self, coord :tuple[int, int]):
@@ -252,8 +254,8 @@ class BaseLayout:
         Faster version of set(Constants.EMPTY, coord) to remove an accu
         """
         self.__field[coord[0], coord[1]] = Constants.EMPTY
-        for c in self.enumerate_adjacent_coords(self.__field, coord):
-            self.__adjacent_accu[c[0], c[1]] -= 1
+        coords = self.enumerate_adjacent_coords(coord)
+        self.__adjacent_accu[coords[:,0], coords[:,1]] -= 1
         self._refresh_potential_power_rate()
 
     def set_optimal_powerplants(self, num_powerplants :int):
@@ -266,7 +268,7 @@ class BaseLayout:
         """
         categories = self.get_power_field_categories(num_powerplants)
         for cat in categories:
-            self.__field[cat.coords[:,0], cat.coords[:,1]] = Constants.POWERPLANT
+            self.__field[cat.coords[:cat.num_fields,0], cat.coords[:cat.num_fields,1]] = Constants.POWERPLANT
 
     def _refresh_potential_power_rate(self):
         """
@@ -288,15 +290,19 @@ class BaseLayout:
             - power_plant_limit: maximum number of power plants to place. If -1: limited only 
                                  by the number of empty fields
         """
-        categories : dict[int, PowerPlantFieldCategory] = dict()
-        mask = (self.__field == Constants.EMPTY).astype(int)
+        categories : dict[int, PowerPlantFieldCategory] = dict()        
         for row in range(Constants.BASE_ROWS):
             for col in range(Constants.BASE_COLUMNS):
                 if self.__field[row, col] == Constants.EMPTY:
                     rate = self.__potential_power_rate[row, col]
-                    if rate not in categories.keys():
-                        coords = np.argwhere(self.__potential_power_rate * mask == rate)
-                        categories[rate] = PowerPlantFieldCategory(rate, num_fields=coords.shape[0], coords=coords)
+                    if rate in categories:
+                        cat = categories[rate]
+                        cat.coords[cat.num_fields,:] = (row,col)
+                        cat.num_fields += 1
+                    else:
+                        arr = np.empty((PowerPlantFieldCategory.MAX_POWERPLANTS_PER_CATEGORY, 2), dtype=np.int32)
+                        arr[0,:] = (row,col)
+                        categories[rate] = PowerPlantFieldCategory(rate, 1, arr)
 
         # sort by rate, descending
         sorted_categories :list[tuple[int,PowerPlantFieldCategory]] = sorted(categories.items(), key=lambda x: x[0], reverse=True)
