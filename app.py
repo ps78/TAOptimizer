@@ -21,28 +21,27 @@ def best_power_layout_from_url(cnctaopt_url :str, n_total_buildings :int=38, top
                              always only the best position with the highest rate increase is chosen
                              (i.e. all of these if multiple with the same rate exist)
     """
-    cnctaopt = CncTaOptParser(cnctaopt_url)
-    lay = BaseLayout(cnctaopt.field, Constants.TIBERIUM | Constants.CRYSTAL)
-
     print(f"Analyzing layout {cnctaopt_url}, placing {n_total_buildings} buildings and using top_n={top_n}")
+
+    cnctaopt = CncTaOptParser(cnctaopt_url)
+    lay = BaseLayout(copy_from_array=cnctaopt.field, filter_field_type=Constants.TIBERIUM | Constants.CRYSTAL)
 
     # find solution
     search = DfsSearch(lay)
     result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)
-    solution :SolutionItem = result.solutions[0] # solutions are identical in terms of power rate, pick first
-
+   
     # print stats
     print(result)
     prev_rate = lay.get_total_power_rate(n_total_buildings)
     print(f"Max power production rate without accus: {prev_rate:,}/h")
-    print(f"Best solution has {len(solution.path)} accus and a power rate of {solution.power_rate:,}/h")
-    for node in solution.path:
+    print(f"Best solution has {result.best.num_accus} accus and a power rate of {result.best.power_rate:,}/h")
+    for node in result.best.path:
         print(f"  ({node.coord[0]},{node.coord[1]}) - {node.power_rate:,}/h (+{node.power_rate-prev_rate:>13,}/h)")
         prev_rate = node.power_rate
 
     # generate solution layout and show url
-    lay.set(Constants.ACCU, np.array([node.coord for node in solution.path], dtype=np.int32))
-    lay.set_optimal_powerplants(n_total_buildings - len(solution.path))
+    lay.set(Constants.ACCU, np.array([node.coord for node in result.best.path], dtype=np.int32))
+    lay.set_optimal_powerplants(n_total_buildings - result.best.num_accus)
     cnctaopt.assign(lay.field)
     print(f"CncTAOpt-Url to best layout:\n{cnctaopt.generate_url()}\n\n")
 
@@ -69,31 +68,30 @@ def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :
     best_layout :ImageLayout = None
     for idx, layout in enumerate(layouts):
         search = DfsSearch(BaseLayout(layout.data))
-        result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)
-        solution = result.solutions[0]
-        print(f"  Layout {idx:>2}: {solution.power_rate:,}/h / {len(solution.path)} accus")
+        result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)        
+        print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus")
+        
+        results.append( (layout.coord, result.best.power_rate) )
 
-        center_coord = layout.coord
-        results.append( (center_coord, solution.power_rate) )
-
-        if best_result is None or best_result.solutions[0].power_rate < solution.power_rate:
+        if best_result is None or best_result.best.power_rate < result.best.power_rate:
             best_result = result
             best_layout = layout
 
     # show stats
     runtime = time.time()-start_time
     print(f"Processed {len(layouts)} layouts in {runtime:.1f} seconds ({runtime/len(layouts):.3f} sec/layout)")
-    print(f"Best layout found has power production rate of {best_result.solutions[0].power_rate:,}/h")
+    print(f"Best layout found has power production rate of {best_result.best.power_rate:,}/h")
 
     # write output image
     p = Path(img_in)
-    img_out = f"{Path.joinpath(p.parent, p.stem + '_out' + p.suffix)}"
+    pars = f"_b{n_total_buildings}_topn{top_n}"
+    img_out = f"{Path.joinpath(p.parent, p.stem + pars + p.suffix)}"
     ib.write_rates_to_image(img_in, img_out, results)
     print(f"Results written to {img_out}")
 
     # generate CncTAOpt-link to best layout
     lay = BaseLayout(copy_from_array=best_layout.data)
-    lay.set(Constants.ACCU, np.array([node.coord for node in best_result.solutions[0].path], dtype=np.int32))
-    lay.set_optimal_powerplants(n_total_buildings - len(best_result.solutions[0].path))
+    lay.set(Constants.ACCU, np.array([node.coord for node in best_result.best.path], dtype=np.int32))
+    lay.set_optimal_powerplants(n_total_buildings - len(best_result.best.path))
     cnctaopt = CncTaOptParser(field = lay.field)
     print(f"CncTAOpt-Url to best layout:\n{cnctaopt.generate_url()}\n\n")

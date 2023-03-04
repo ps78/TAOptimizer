@@ -23,8 +23,20 @@ class Image2Base:
     Imgage2Base can extract the base layouts from an 
     image (screenshot) of the base-scanner output
     """
-    
-    def __init__(self, anchor_img :str = "anchor.png", layout_offset :tuple[int,int] = (1, 20), layout_dim :tuple[int,int] = (144, 158)):
+    DEFAULT_ANCHOR_IMG :str = "anchor.png"
+    DEFAULT_LAYOUT_OFFSET :tuple[int,int] = (1,20)
+    DEFAULT_LAYOUT_DIM :tuple[int,int] = (144, 158)
+    DEFAULT_DIGITS_IMG :str = "digits.png"
+    DEFAULT_COORD_OFFSET :tuple[int,int] = (67,3)
+    DEFAULT_COORD_DIM :tuple[int,int] = (53,16)
+
+    def __init__(self, 
+                    anchor_img :str = DEFAULT_ANCHOR_IMG, 
+                    layout_offset :tuple[int,int] = DEFAULT_LAYOUT_OFFSET, 
+                    layout_dim :tuple[int,int] = DEFAULT_LAYOUT_DIM,
+                    digits_img :str = DEFAULT_DIGITS_IMG,
+                    coord_offset :tuple[int,int] = DEFAULT_COORD_OFFSET,
+                    coord_dim :tuple[int,int] = DEFAULT_COORD_DIM):
         """
         Constructor
 
@@ -37,6 +49,9 @@ class Image2Base:
         self.__anchor_img = anchor_img
         self.__layout_offset = layout_offset
         self.__layout_dim = layout_dim
+        self.__digits_img = digits_img
+        self.__coord_offset = coord_offset
+        self.__coord_dim = coord_dim
 
     def find_layouts(self, layouts_img :str) -> list[ImageLayout]:
         """
@@ -53,6 +68,10 @@ class Image2Base:
         template = cv2.imread(self.__anchor_img)
         w, h = template.shape[:-1]
 
+        # load the digit images to detect the coordinates
+        digits_img = cv2.imread(self.__digits_img)
+        digits = [digits_img[:,d*10:(d+1)*10,:] for d in range(10)]
+
         # find all instances of the template within the image
         res = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
         threshold = .9
@@ -61,7 +80,7 @@ class Image2Base:
         # deduct the size in pixels of one cell(field) within a lyayout
         cell_dim = (self.__layout_dim[0] / float(Constants.BASE_COLUMNS), self.__layout_dim[1] / float(Constants.BASE_ROWS))        
         layouts = list()
-
+        
         # iterate through all layouts found in the image
         for pt in zip(*loc[::-1]):  # Switch columns and rows
             # top-left coordinate in pixels of the current layout within the image
@@ -69,6 +88,13 @@ class Image2Base:
             # center coordinate of the layout, used to place text later
             base_center = (topleft[0] + self.__layout_dim[0]//2, topleft[1] + self.__layout_dim[1]//2)
             
+            # find coordinate-text
+            coord_top_left = (pt[0]+self.__coord_offset[0], pt[1]+self.__coord_offset[1])
+            coord_bottom_right = (pt[0]+self.__coord_offset[0]+self.__coord_dim[0], pt[1]+self.__coord_offset[1]+self.__coord_dim[1])
+            cv2.rectangle(img_rgb, pt1=coord_top_left, pt2=coord_bottom_right, color=(0,0,255), thickness=1)
+            coord_img = img_rgb[coord_top_left[1]:coord_bottom_right[1],coord_top_left[0]:coord_bottom_right[0],:]
+            self._detect_coordinates(coord_img, digits)
+
             # check each cell of the layout and decide if it's empty, contains tiberium or crystal
             base_arr = np.zeros((Constants.BASE_ROWS, Constants.BASE_COLUMNS), dtype=np.int32)
             for row in range(Constants.BASE_ROWS):
@@ -77,15 +103,22 @@ class Image2Base:
                     cell_center = (topleft[0] + int((col+0.5)*cell_dim[0]), int(topleft[1] + (row+0.5)*cell_dim[1]))
                     base_arr[row, col] = self._detect_cell_type(img_rgb, cell_center)
                     # for debugging:
-                    #cv2.circle(img_rgb, center=cell_center, radius=3, thickness=1, color=(0,0,255)) 
+                    cv2.circle(img_rgb, center=cell_center, radius=3, thickness=1, color=(0,0,255)) 
                     
             # check that we have a valid layout with 12 resource field, ignore it if not (the image might have been cropped)
             if np.sum(base_arr == Constants.TIBERIUM) + np.sum(base_arr == Constants.CRYSTAL) == 12:
                 layouts.append(ImageLayout(base_arr, base_center))
 
         # for debugging:
-        #cv2.imwrite('result.png', img_rgb)
+        cv2.imwrite('result.png', img_rgb)
         return layouts
+
+    def _detect_coordinates(self, img, digits) -> tuple[int,int]:
+        for d in range(10):
+            res = cv2.matchTemplate(img, digits[d], cv2.TM_SQDIFF_NORMED)
+            loc = np.where(res == 1)
+            for pt in zip(*loc[::-1]):
+                print(f"found digit {d} at {pt}")
 
     def _detect_cell_type(self, img, coord :tuple[int,int]) -> int:
         """

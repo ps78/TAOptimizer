@@ -16,6 +16,13 @@ class SolutionItem:
     """
     Type used for elements returned in the solution list by search
     """
+    @property
+    def num_accus(self) -> int:
+        """
+        Returns the number of accus in the solution, i.e. the path length
+        """
+        return len(self.path)
+ 
     def __init__(self, power_rate :int, path :list[PathNode]):
         self.power_rate = power_rate
         self.path = path
@@ -36,6 +43,13 @@ class SearchResult:
         list of solution items
         """
         return self.__solutions
+
+    @property 
+    def best(self) -> SolutionItem|None:
+        """
+        Reference to the best solution
+        """
+        return None if not any(self.__solutions) else self.__solutions[0]
 
     @property
     def runtime(self) -> float:
@@ -86,7 +100,8 @@ class SearchResult:
         self.__iterations += 1
 
     def __str__(self) -> str:
-        return f"Found {self.num_solutions} solution(s) in {self.runtime:.3f} sec ({self.__iterations:,} iterations)"
+        s = f"Found {self.num_solutions} solution(s) in {self.runtime:.3f} sec ({self.iterations:,} iterations)"
+        return s
 
 def get_top_n_ranks(lst :list, top_n :int, selector = None) -> list:
     """
