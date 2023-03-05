@@ -89,14 +89,14 @@ class Image2Base:
                     cell_center = (topleft[0] + int((col+0.5)*cell_dim[0]), int(topleft[1] + (row+0.5)*cell_dim[1]))
                     base_arr[row, col] = self._detect_cell_type(img_rgb, cell_center)
                     # for debugging:
-                    cv2.circle(img_rgb, center=cell_center, radius=3, thickness=1, color=(0,0,255)) 
+                    #cv2.circle(img_rgb, center=cell_center, radius=3, thickness=1, color=(0,0,255)) 
                     
             # check that we have a valid layout with 12 resource field, ignore it if not (the image might have been cropped)
             if np.sum(base_arr == Constants.TIBERIUM) + np.sum(base_arr == Constants.CRYSTAL) == 12:
                 layouts.append(ImageLayout(base_arr, base_center))
 
         # for debugging:
-        cv2.imwrite('result.png', img_rgb)
+        #cv2.imwrite('result.png', img_rgb)
         return layouts
 
     def _detect_cell_type(self, img, coord :tuple[int,int]) -> int:

@@ -109,7 +109,7 @@ def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :
             if len(jobs) > 0:
                 [j.start() for j in jobs]
                 [j.join() for j in jobs]
-                for _, result in process_results.items():
+                for _, result in filter(lambda x:x[1] is not None, process_results.items()):
                     results.append(result)
                     print_result(result)
                 num_results = len(results) - results_idx_start
