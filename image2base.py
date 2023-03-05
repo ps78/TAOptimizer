@@ -18,13 +18,25 @@ class ImageLayout:
         self.__data = data
         self.__coord = coord
 
+class CoordinateRateTuple:
+    def __init__(self, layout_index:int, coord :tuple[int,int], rate :int):
+        self.layout_index = layout_index
+        self.coord = coord
+        self.rate = rate
+
 class Image2Base:
     """
     Imgage2Base can extract the base layouts from an 
     image (screenshot) of the base-scanner output
     """
-    
-    def __init__(self, anchor_img :str = "anchor.png", layout_offset :tuple[int,int] = (1, 20), layout_dim :tuple[int,int] = (144, 158)):
+    DEFAULT_ANCHOR_IMG :str = "anchor.png"
+    DEFAULT_LAYOUT_OFFSET :tuple[int,int] = (1,20)
+    DEFAULT_LAYOUT_DIM :tuple[int,int] = (144, 158)
+
+    def __init__(self, 
+                    anchor_img :str = DEFAULT_ANCHOR_IMG, 
+                    layout_offset :tuple[int,int] = DEFAULT_LAYOUT_OFFSET, 
+                    layout_dim :tuple[int,int] = DEFAULT_LAYOUT_DIM):
         """
         Constructor
 
@@ -50,8 +62,8 @@ class Image2Base:
         """
         # import the image and the template
         img_rgb = cv2.imread(layouts_img)
+        img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
         template = cv2.imread(self.__anchor_img)
-        w, h = template.shape[:-1]
 
         # find all instances of the template within the image
         res = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
@@ -61,7 +73,7 @@ class Image2Base:
         # deduct the size in pixels of one cell(field) within a lyayout
         cell_dim = (self.__layout_dim[0] / float(Constants.BASE_COLUMNS), self.__layout_dim[1] / float(Constants.BASE_ROWS))        
         layouts = list()
-
+        
         # iterate through all layouts found in the image
         for pt in zip(*loc[::-1]):  # Switch columns and rows
             # top-left coordinate in pixels of the current layout within the image
@@ -116,7 +128,7 @@ class Image2Base:
         else:
             return Constants.EMPTY
 
-    def write_rates_to_image(self, input_image :str, output_image :str, data :list[tuple[tuple[int,int], int]]):
+    def write_rates_to_image(self, input_image :str, output_image :str, data :list[CoordinateRateTuple]):
         """
         Write the rates provided in data into the impage provided by input_image and
         stores the result in the output-image
@@ -128,12 +140,16 @@ class Image2Base:
                     each element in the list is a tuple <coord, rate>
         """
         img = cv2.imread(input_image)
-        max_rate = max([item[1] for item in data])
-        for item in data:
-            coord = (int(item[0][0]-self.__layout_dim[0]/2), item[0][1])
-            rate = f"{item[1]/1000000000.0:.3f}G/h"            
+        max_rate = max([item.rate for item in data])
+        
+        for layout_index in [item.layout_index for item in data]:
+            # get the element if this layout index which has the highest rate
+            item = sorted([item for item in data if item.layout_index == layout_index], reverse=True, key=lambda x:x.rate)[0]
+
+            coord = (int(item.coord[0]-self.__layout_dim[0]/2), item.coord[1])
+            rate = f"{item.rate/1000000000.0:.3f}G/h"            
             
-            if item[1] == max_rate:
+            if item.rate == max_rate:
                 outer_color = (0,255,255)
                 inner_color = (0,0,255)
             else:
