@@ -5,7 +5,7 @@ class PathNode:
     """
     Type used for elements of solution paths in SolutionItem.path
     """
-    def __init__(self, coord, power_rate :int):
+    def __init__(self, coord :tuple[int,int], power_rate :int):
         self.coord = coord
         self.power_rate = power_rate
     

@@ -18,6 +18,12 @@ class ImageLayout:
         self.__data = data
         self.__coord = coord
 
+class CoordinateRateTuple:
+    def __init__(self, layout_index:int, coord :tuple[int,int], rate :int):
+        self.layout_index = layout_index
+        self.coord = coord
+        self.rate = rate
+
 class Image2Base:
     """
     Imgage2Base can extract the base layouts from an 
@@ -122,7 +128,7 @@ class Image2Base:
         else:
             return Constants.EMPTY
 
-    def write_rates_to_image(self, input_image :str, output_image :str, data :list[tuple[tuple[int,int], int]]):
+    def write_rates_to_image(self, input_image :str, output_image :str, data :list[CoordinateRateTuple]):
         """
         Write the rates provided in data into the impage provided by input_image and
         stores the result in the output-image
@@ -134,12 +140,16 @@ class Image2Base:
                     each element in the list is a tuple <coord, rate>
         """
         img = cv2.imread(input_image)
-        max_rate = max([item[1] for item in data])
-        for item in data:
-            coord = (int(item[0][0]-self.__layout_dim[0]/2), item[0][1])
-            rate = f"{item[1]/1000000000.0:.3f}G/h"            
+        max_rate = max([item.rate for item in data])
+        
+        for layout_index in [item.layout_index for item in data]:
+            # get the element if this layout index which has the highest rate
+            item = sorted([item for item in data if item.layout_index == layout_index], reverse=True, key=lambda x:x.rate)[0]
+
+            coord = (int(item.coord[0]-self.__layout_dim[0]/2), item.coord[1])
+            rate = f"{item.rate/1000000000.0:.3f}G/h"            
             
-            if item[1] == max_rate:
+            if item.rate == max_rate:
                 outer_color = (0,255,255)
                 inner_color = (0,0,255)
             else:

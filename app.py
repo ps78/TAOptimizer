@@ -1,10 +1,11 @@
 import numpy as np
 import time
+import multiprocessing
 
 from searching import DfsSearch, SearchResult, SolutionItem
 from game import BaseLayout, Constants
 from cnctaopt import CncTaOptParser
-from image2base import Image2Base, ImageLayout
+from image2base import Image2Base, ImageLayout, CoordinateRateTuple
 from pathlib import Path
 
 def best_power_layout_from_url(cnctaopt_url :str, n_total_buildings :int=38, top_n :int=1):
@@ -45,6 +46,12 @@ def best_power_layout_from_url(cnctaopt_url :str, n_total_buildings :int=38, top
     cnctaopt.assign(lay.field)
     print(f"CncTAOpt-Url to best layout:\n{cnctaopt.generate_url()}\n\n")
 
+class LayoutSearchResult:
+    def __init__(self, layout_index :int, layout: ImageLayout, search_result :SearchResult):
+        self.layout_index = layout_index
+        self.layout = layout
+        self.search_result = search_result
+
 def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :int=1, next_level_threshold :int=0):
     """
     Parses the given image which is the output of the BaseScanner script in TA.
@@ -76,42 +83,51 @@ def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :
         top_n_next :int = top_n
         print(f"Searching for best layout with top_n={top_n}")
     
-    best_result :SearchResult = None
-    best_layout :ImageLayout = None
-    results = list()
+    print_result = lambda idx, result: print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h {result.best.num_accus:>2} accus {result.iterations:>5,} iterations {result.runtime:>8.3f} sec")
+    print_stats = lambda n_layouts, runtime: print(f"Processed {n_layouts} layouts in {runtime:.1f} seconds ({runtime/n_layouts:.3f} sec/layout)")
+
+    # we store all search reasults in a list of tuples : (layout-index, layout, search result)
+    results :list[LayoutSearchResult] = []
+
+    # first pass of search with top_n=top_n_start    
     for idx, layout in enumerate(layouts):
-        search = DfsSearch(BaseLayout(layout.data))
-        
-        result :SearchResult = search.find_best_power(top_n=top_n_start, n_total_buildings=n_total_buildings)
-        print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus ({result.runtime:.3f} sec)")
+        result :SearchResult = _process_layout(layout, top_n_start, n_total_buildings)
+        print_result(idx, result)
+        results.append(LayoutSearchResult(idx, layout, result))
+    n_first_pass_results = len(results)
+    print_stats(n_first_pass_results, time.time()-start_time)
 
-        # search again with top_n=top_n if we have a next_level_threshold
-        if top_n_next > top_n_start and result.best.power_rate > next_level_threshold:
-            print(f"  repeat search with top_n={top_n_next}")            
-            result :SearchResult = search.find_best_power(top_n=top_n_next, n_total_buildings=n_total_buildings)
-            print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus ({result.runtime:.3f} sec)")
-
-        results.append( (layout.coord, result.best.power_rate) )
-
-        if best_result is None or best_result.best.power_rate < result.best.power_rate:
-            best_result = result
-            best_layout = layout
-
+    # search again with a larger top_n, if requested
+    start_time = time.time()
+    if top_n_next > top_n_start:
+        print(f"Repeat search with top_n={top_n_next}")
+        for result_idx in range(n_first_pass_results):
+            if results[result_idx].search_result.best.power_rate > next_level_threshold:                
+                result :SearchResult = _process_layout(layout, top_n_next, n_total_buildings)
+                results.append(LayoutSearchResult(idx, layout, result))
+                print_result(idx, result)
+        print_stats(len(results)-n_first_pass_results, time.time()-start_time)
+    
     # show stats
-    runtime = time.time()-start_time
-    print(f"Processed {len(layouts)} layouts in {runtime:.1f} seconds ({runtime/len(layouts):.3f} sec/layout)")
-    print(f"Best layout found has power production rate of {best_result.best.power_rate:,}/h")
+    results.sort(reverse=True, key=lambda x: x.search_result.best.power_rate)
+    print(f"Best layout is {results[0].layout_index} and has a power production rate of { results[0].search_result.best.power_rate:,}/h")
 
     # write output image
     p = Path(img_in)
     pars = f"_b{n_total_buildings}_topn{top_n}"
     img_out = f"{Path.joinpath(p.parent, p.stem + pars + p.suffix)}"
-    ib.write_rates_to_image(img_in, img_out, results)
+    ib.write_rates_to_image(img_in, img_out, [CoordinateRateTuple(r.layout_index, r.layout.coord, r.search_result.best.power_rate) for r in results])
     print(f"Results written to {img_out}")
 
     # generate CncTAOpt-link to best layout
-    lay = BaseLayout(copy_from_array=best_layout.data)
-    lay.set(Constants.ACCU, np.array([node.coord for node in best_result.best.path], dtype=np.int32))
-    lay.set_optimal_powerplants(n_total_buildings - len(best_result.best.path))
+    lay = BaseLayout(copy_from_array=results[0].layout.data)
+    lay.set(Constants.ACCU, np.array([node.coord for node in results[0].search_result.best.path], dtype=np.int32))
+    lay.set_optimal_powerplants(n_total_buildings - len(results[0].search_result.best.path))
     cnctaopt = CncTaOptParser(field = lay.field)
     print(f"CncTAOpt-Url to best layout:\n{cnctaopt.generate_url()}\n\n")
+
+def _process_layout(layout: ImageLayout, top_n :int, n_total_buildings :int) -> SearchResult:
+    search = DfsSearch(BaseLayout(layout.data))        
+    result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)
+    return result
+    
