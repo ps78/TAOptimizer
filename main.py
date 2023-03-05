@@ -1,10 +1,6 @@
 from app import best_power_layout_from_url, best_power_layout_from_image
 from image2base import Image2Base
 
-i2b = Image2Base()
-i2b.find_layouts('sample_layouts.png')
-
-
 #best_power_layout_from_url("https://cnctaopt.com/EPWsn", n_total_buildings=38, top_n=2) # 14.03
 #best_power_layout_from_url("https://cnctaopt.com/3yrxR", n_total_buildings=38, top_n=2) # 14.07
 
@@ -18,7 +14,7 @@ i2b.find_layouts('sample_layouts.png')
 #best_power_layout_from_image('images/van10.png', n_total_buildings=38, top_n=1)
 
 # run a search on a screenshot from the BaseScanner:
-#best_power_layout_from_image('sample_layouts.png', n_total_buildings=38, top_n=1)
+best_power_layout_from_image('sample_layouts.png', n_total_buildings=38, top_n=2, next_level_threshold=13600000000)
 
 # optimize some layouts given by a cnctaopt-link:
 #best_power_layout_from_url("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1) # 0.09s, 14.117 G/h

@@ -45,7 +45,7 @@ def best_power_layout_from_url(cnctaopt_url :str, n_total_buildings :int=38, top
     cnctaopt.assign(lay.field)
     print(f"CncTAOpt-Url to best layout:\n{cnctaopt.generate_url()}\n\n")
 
-def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :int=1):
+def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :int=1, next_level_threshold :int=0):
     """
     Parses the given image which is the output of the BaseScanner script in TA.
     It tries to identify all layouts in this image finds the best power layout for each
@@ -56,21 +56,41 @@ def best_power_layout_from_image(img_in :str, n_total_buildings :int=38, top_n :
         top_n:             number of top ranks to consider in the tree search. With top_n=1, 
                            always only the best position with the highest rate increase is chosen
                            (i.e. all of these if multiple with the same rate exist)
+        next_level_threshold:  if this is set to a value >0, the search is started with top_n=1 and then increased
+                           to top_n if the power rate was bigger than this threshold
     """
-    ib = Image2Base()
+    start_time = time.time()    
 
-    # scan the given image
-    start_time = time.time()
-    results = list()
-    print(f"Reading layouts from {img_in}")
+    # scan the given image    
+    ib = Image2Base()
     layouts = ib.find_layouts(img_in)
+    print(f"Reading layouts from {img_in}.. found {len(layouts)} layouts")
+
+    # if we have a next_level_threshold, start always with top_n=1    
+    if next_level_threshold > 0:
+        top_n_start :int = 1
+        top_n_next :int = top_n
+        print(f"Searching for best layout starting with top_n={top_n_start}, increasing to {top_n_next} if result is >= {next_level_threshold/1000000000.0:.2f}G/h")
+    else:
+        top_n_start :int = top_n
+        top_n_next :int = top_n
+        print(f"Searching for best layout with top_n={top_n}")
+    
     best_result :SearchResult = None
     best_layout :ImageLayout = None
+    results = list()
     for idx, layout in enumerate(layouts):
         search = DfsSearch(BaseLayout(layout.data))
-        result :SearchResult = search.find_best_power(top_n=top_n, n_total_buildings=n_total_buildings)        
-        print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus")
         
+        result :SearchResult = search.find_best_power(top_n=top_n_start, n_total_buildings=n_total_buildings)
+        print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus ({result.runtime:.3f} sec)")
+
+        # search again with top_n=top_n if we have a next_level_threshold
+        if top_n_next > top_n_start and result.best.power_rate > next_level_threshold:
+            print(f"  repeat search with top_n={top_n_next}")            
+            result :SearchResult = search.find_best_power(top_n=top_n_next, n_total_buildings=n_total_buildings)
+            print(f"  Layout {idx:>2}: {result.best.power_rate:,}/h / {result.best.num_accus} accus ({result.runtime:.3f} sec)")
+
         results.append( (layout.coord, result.best.power_rate) )
 
         if best_result is None or best_result.best.power_rate < result.best.power_rate:

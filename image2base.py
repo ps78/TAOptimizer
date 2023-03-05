@@ -26,17 +26,11 @@ class Image2Base:
     DEFAULT_ANCHOR_IMG :str = "anchor.png"
     DEFAULT_LAYOUT_OFFSET :tuple[int,int] = (1,20)
     DEFAULT_LAYOUT_DIM :tuple[int,int] = (144, 158)
-    DEFAULT_DIGITS_IMG :str = "digits.png"
-    DEFAULT_COORD_OFFSET :tuple[int,int] = (70,6)
-    DEFAULT_COORD_DIM :tuple[int,int] = (48,11)
 
     def __init__(self, 
                     anchor_img :str = DEFAULT_ANCHOR_IMG, 
                     layout_offset :tuple[int,int] = DEFAULT_LAYOUT_OFFSET, 
-                    layout_dim :tuple[int,int] = DEFAULT_LAYOUT_DIM,
-                    digits_img :str = DEFAULT_DIGITS_IMG,
-                    coord_offset :tuple[int,int] = DEFAULT_COORD_OFFSET,
-                    coord_dim :tuple[int,int] = DEFAULT_COORD_DIM):
+                    layout_dim :tuple[int,int] = DEFAULT_LAYOUT_DIM):
         """
         Constructor
 
@@ -49,9 +43,6 @@ class Image2Base:
         self.__anchor_img = anchor_img
         self.__layout_offset = layout_offset
         self.__layout_dim = layout_dim
-        self.__digits_img = digits_img
-        self.__coord_offset = coord_offset
-        self.__coord_dim = coord_dim
 
     def find_layouts(self, layouts_img :str) -> list[ImageLayout]:
         """
@@ -68,11 +59,6 @@ class Image2Base:
         img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
         template = cv2.imread(self.__anchor_img)
 
-        # load the digit images to detect the coordinates
-        digits_img = cv2.cvtColor(cv2.imread(self.__digits_img), cv2.COLOR_BGR2GRAY)
-        digits = [digits_img[:,d*10:(d+1)*10] for d in range(10)]
-        digit_masks = [(digits[d]>60).astype(np.uint8) for d in range(10)] 
-        
         # find all instances of the template within the image
         res = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
         threshold = .9
@@ -89,14 +75,6 @@ class Image2Base:
             # center coordinate of the layout, used to place text later
             base_center = (topleft[0] + self.__layout_dim[0]//2, topleft[1] + self.__layout_dim[1]//2)
             
-            # find coordinate-text
-            coord_top_left = (pt[0]+self.__coord_offset[0], pt[1]+self.__coord_offset[1])
-            coord_bottom_right = (pt[0]+self.__coord_offset[0]+self.__coord_dim[0], pt[1]+self.__coord_offset[1]+self.__coord_dim[1])
-            cv2.rectangle(img_rgb, pt1=coord_top_left, pt2=coord_bottom_right, color=(0,0,255), thickness=1)
-            coord_img = img_gray[coord_top_left[1]:coord_bottom_right[1],coord_top_left[0]:coord_bottom_right[0]]
-            cv2.imwrite('coord.png', coord_img)
-            self._detect_coordinates(coord_img, digits, digit_masks)
-
             # check each cell of the layout and decide if it's empty, contains tiberium or crystal
             base_arr = np.zeros((Constants.BASE_ROWS, Constants.BASE_COLUMNS), dtype=np.int32)
             for row in range(Constants.BASE_ROWS):
@@ -114,23 +92,6 @@ class Image2Base:
         # for debugging:
         cv2.imwrite('result.png', img_rgb)
         return layouts
-
-    def _detect_coordinates(self, img, digits :np.ndarray, digit_masks :np.ndarray) -> tuple[int,int]:
-        detected_digits :dict[int, int] = {0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0}        
-        
-        img = ((img > 150)*255).astype(np.float64)
-        cv2.imwrite(f'coord.png', img)
-        for d in range(10):            
-            digit = ((digits[d]>150)*255).astype(np.float64)
-            cv2.imwrite(f'digit{d}.png', digit)
-            h, w = digit.shape
-            for dx in range (img.shape[1]-w+1):
-                diff = float(np.sum(np.abs(img[:,dx:dx+w]-digit)/255.0 * digit_masks[d])) / np.sum(digit_masks[d])
-                if diff < 0.26:
-                    print(f"digit {d} : dx={dx}, diff={diff:.2f}")
-
-
-        return detected_digits.items()
 
     def _detect_cell_type(self, img, coord :tuple[int,int]) -> int:
         """
