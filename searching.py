@@ -150,6 +150,8 @@ class DfsSearch():
         Recursive part of the search() function, do not call directly
         """
         search_result.inc_iterations()
+        if search_result.iterations % 1000 == 0:
+            print(f"{search_result.iterations:>10,} iterations")
 
         # get all fields where we can put an accu    
         empty_fields = self.__layout.get_empty_fields()
@@ -167,12 +169,12 @@ class DfsSearch():
         
         # order by power rate descending, take top top_n entries (where equal rates count as one)
         next_coords :list[PathNode] = get_top_n_ranks(coord_rate_map, top_n, selector=lambda x: x.power_rate)
-        for item in next_coords:
+        for item in next_coords:           
             # set accu and append coord to path
             #self.__layout.set(Constants.ACCU, item.coord)
             self.__layout.set_accu(item.coord)
             path.append(item)
-
+            
             # if we found a solution that's better than what we have, clear all solutions and add it
             # if it's identical, just add it
             if search_result.num_solutions==0 or item.power_rate >= search_result.solutions[0].power_rate:
