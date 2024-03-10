@@ -17,4 +17,5 @@ if __name__ == "__main__":
 
     # optimize some layouts given by a cnctaopt-link:
     #best_power_layout_from_url("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1) # 0.09s, 14.117 G/h
-    best_power_layout_from_url("https://cnctaopt.com/tvPDW", n_total_buildings=38, top_n=2) # topn=2: 78s, 14.131 G/h // topn=3: 1541s, 14.131 G/h, 155k iterations
+    #best_power_layout_from_url("https://cnctaopt.com/tvPDW", n_total_buildings=38, top_n=2) # topn=2: 78s, 14.131 G/h // topn=3: 1541s, 14.131 G/h, 155k iterations
+    best_power_layout_from_url("https://cnctaopt.com/4oXXd", n_total_buildings=38, top_n=2)
