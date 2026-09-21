@@ -1,21 +1,13 @@
 from app import best_power_layout_from_url, best_power_layout_from_image
-from image2base import Image2Base
-from pathlib import Path
 
 if __name__ == "__main__":
-    
-    #nbuildings=38
-    #topn=2
-    #threshold=13800000000
-    #for base in ['Minas_Tirith', 'Rivendell', 'Lothlorien', 'Mordor',  'Moria', 'Isengard', 'Shire',
-    #            'Hobbiton', 'Rohan', 'Gondor', 'Bree', 'Rhun', 'Eriador', 'Ered_Luin', 'Fangorn', 
-    #            'Middle_Earth', 'Angmar', 'Cardolan', 'Mirkwood', 'Enedwaith', 'Harlindon' ]:
-    #    best_power_layout_from_image(f'images/{base}.png', nbuildings, topn, threshold)
 
     # run a search on a screenshot from the BaseScanner:
-    #best_power_layout_from_image('sample_layouts.png', n_total_buildings=38, top_n=2, next_level_threshold=13800000000)
+    best_power_layout_from_image('sample_layouts.png', n_total_buildings=38, top_n=2, next_level_threshold=13700000000)
 
     # optimize some layouts given by a cnctaopt-link:
-    #best_power_layout_from_url("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1) # 0.09s, 14.117 G/h
-    #best_power_layout_from_url("https://cnctaopt.com/tvPDW", n_total_buildings=38, top_n=2) # topn=2: 78s, 14.131 G/h // topn=3: 1541s, 14.131 G/h, 155k iterations
-    best_power_layout_from_url("https://cnctaopt.com/4oXXd", n_total_buildings=38, top_n=2)
+    best_power_layout_from_url("https://cnctaopt.com/FDjPl", n_total_buildings=38, top_n=1) # 0.09s, 14.117 G/h
+
+    # example where top_n=1 and top_n=2 return quite different results:
+    best_power_layout_from_url("https://cnctaopt.com/UsO7C", n_total_buildings=38, top_n=1) # 0.15s
+    best_power_layout_from_url("https://cnctaopt.com/UsO7C", n_total_buildings=38, top_n=2) # 33s
